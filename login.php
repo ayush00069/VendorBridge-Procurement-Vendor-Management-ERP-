@@ -1,69 +1,82 @@
-
 <?php
 session_start();
 include 'db.php';
 
-$msg = "";
+$error = "";
 
 if(isset($_POST['login']))
 {
-    $email = mysqli_real_escape_string($conn,$_POST['email']);
-    $password = $_POST['password'];
+    $email = trim($_POST['email']);
+    $password = trim($_POST['password']);
 
-    $query = mysqli_query(
-        $conn,
-        "SELECT * FROM users WHERE email='$email'"
-    );
+    $stmt = $conn->prepare("SELECT * FROM users WHERE email=?");
+    $stmt->bind_param("s", $email);
+    $stmt->execute();
 
-    if(mysqli_num_rows($query) > 0)
+    $result = $stmt->get_result();
+
+    if($result->num_rows > 0)
     {
-        $user = mysqli_fetch_assoc($query);
+        $user = $result->fetch_assoc();
 
-        if(password_verify($password,$user['password']))
+        if(password_verify($password, $user['password']))
         {
             $_SESSION['user_id'] = $user['id'];
-            $_SESSION['fullname'] = $user['fullname'];
+            $_SESSION['username'] = $user['username'];
+            $_SESSION['email'] = $user['email'];
             $_SESSION['role'] = $user['role'];
 
-            header("Location: dashboard.php");
-            exit();
+            if($user['role'] == "vendor")
+            {
+                header("Location: vendor_dashboard.php");
+                exit();
+            }
+            elseif($user['role'] == "officer")
+            {
+                header("Location: officer_dashboard.php");
+                exit();
+            }
+            elseif($user['role'] == "manager")
+            {
+                header("Location: manager_dashboard.php");
+                exit();
+            }
         }
         else
         {
-            $msg = "Invalid Password";
+            $error = "Invalid Password";
         }
     }
     else
     {
-        $msg = "Account Not Found";
+        $error = "Email Not Registered";
     }
+
+    $stmt->close();
 }
 ?>
 
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
 
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>VendorBridge ERP Admin Login</title>
+<title>VendorBridge ERP | Login</title>
 
 <link rel="stylesheet" href="login.css">
+
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
 <link rel="stylesheet"
 href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
-rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 </head>
 
 <body>
-
-<div class="blob blob1"></div>
-<div class="blob blob2"></div>
 
 <div class="container">
 
@@ -73,21 +86,17 @@ rel="stylesheet">
             <i class="fa-solid fa-building"></i>
         </div>
 
-        <div class="brand">
+        <h1>VendorBridge</h1>
 
-            <h1>VendorBridge</h1>
-
-            <p>
-                Procurement & Vendor Management ERP
-            </p>
-
-        </div>
+        <p>
+            Procurement & Vendor Management ERP
+        </p>
 
         <div class="features">
 
             <div class="feature">
-                <i class="fa-solid fa-users"></i>
-                Vendor Management
+                <i class="fa-solid fa-user-shield"></i>
+                Role Based Access
             </div>
 
             <div class="feature">
@@ -96,18 +105,8 @@ rel="stylesheet">
             </div>
 
             <div class="feature">
-                <i class="fa-solid fa-scale-balanced"></i>
-                Quotation Comparison
-            </div>
-
-            <div class="feature">
-                <i class="fa-solid fa-cart-shopping"></i>
-                Purchase Orders
-            </div>
-
-            <div class="feature">
-                <i class="fa-solid fa-file-invoice-dollar"></i>
-                Invoice Generation
+                <i class="fa-solid fa-file-invoice"></i>
+                Invoice & PO Tracking
             </div>
 
         </div>
@@ -118,90 +117,57 @@ rel="stylesheet">
 
         <div class="card">
 
-            <div class="card-logo">
-
-                <i class="fa-solid fa-warehouse"></i>
-
-            </div>
-
-            <h2>Welcome Back Admin</h2>
+            <h2>Welcome Back</h2>
 
             <p class="subtitle">
-
-                Sign in to continue to VendorBridge ERP
-
+                Sign in to VendorBridge ERP
             </p>
-
-            <?php if($msg!=""){ ?>
-
-            <div class="error">
-
-                <?php echo $msg; ?>
-
-            </div>
-
-            <?php } ?>
 
             <form method="POST">
 
                 <div class="input-box">
-
-                    <i class="fa-solid fa-envelope left-icon"></i>
-
+                    <i class="fa-solid fa-envelope"></i>
                     <input
-                    type="email"
-                    name="email"
-                    placeholder="Email Address"
-                    required>
-
+                        type="email"
+                        name="email"
+                        placeholder="Email Address"
+                        required>
                 </div>
 
-                <div class="input-box">
+                <div class="input-box password-box">
 
-                    <i class="fa-solid fa-lock left-icon"></i>
+                    <i class="fa-solid fa-lock"></i>
 
                     <input
-                    type="password"
-                    id="password"
-                    name="password"
-                    placeholder="Password"
-                    required>
+                        type="password"
+                        id="password"
+                        name="password"
+                        placeholder="Password"
+                        required>
 
-                    <button
-                    type="button"
-                    class="toggle-password"
-                    onclick="togglePassword()">
+                    <span
+                        class="toggle-password"
+                        onclick="togglePassword()">
 
                         <i
-                        id="eyeIcon"
-                        class="fa-solid fa-eye"></i>
+                            id="eyeIcon"
+                            class="fa-solid fa-eye">
+                        </i>
 
-                    </button>
+                    </span>
 
                 </div>
 
-                <div class="options">
-
-                    <label>
-
-                        <input type="checkbox">
-
-                        Remember Me
-
-                    </label>
-
-                    <a href="#">
-
+                <div class="login-options">
+                    <a href="forgot_password.php">
                         Forgot Password?
-
                     </a>
-
                 </div>
 
                 <button
-                type="submit"
-                name="login"
-                class="btn">
+                    type="submit"
+                    name="login"
+                    class="btn">
 
                     Sign In
 
@@ -209,9 +175,13 @@ rel="stylesheet">
 
             </form>
 
-            <div class="footer-text">
+            <div class="register-link">
 
-                VendorBridge ERP © 2026
+                Don't have an account?
+
+                <a href="register.php">
+                    Create Account
+                </a>
 
             </div>
 
@@ -220,6 +190,20 @@ rel="stylesheet">
     </div>
 
 </div>
+
+<?php
+if(!empty($error))
+{
+    echo "
+    <script>
+    Swal.fire({
+        icon:'error',
+        title:'Login Failed',
+        text:'$error'
+    });
+    </script>";
+}
+?>
 
 <script>
 
@@ -231,19 +215,21 @@ function togglePassword()
     const eyeIcon =
     document.getElementById("eyeIcon");
 
-    if(password.type==="password")
+    if(password.type === "password")
     {
-        password.type="text";
-
-        eyeIcon.classList.remove("fa-eye");
-        eyeIcon.classList.add("fa-eye-slash");
+        password.type = "text";
+        eyeIcon.classList.replace(
+            "fa-eye",
+            "fa-eye-slash"
+        );
     }
     else
     {
-        password.type="password";
-
-        eyeIcon.classList.remove("fa-eye-slash");
-        eyeIcon.classList.add("fa-eye");
+        password.type = "password";
+        eyeIcon.classList.replace(
+            "fa-eye-slash",
+            "fa-eye"
+        );
     }
 }
 

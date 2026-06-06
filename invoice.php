@@ -1,44 +1,55 @@
-
 <?php
 session_start();
 
-if(!isset($_SESSION['user_id']))
-{
-    header("Location: login.php");
-    exit();
-}
-
 include 'db.php';
-
+include 'config/constants.php';
+include 'config/mail.php';
 if(!isset($_GET['po_id']))
 {
     die("Purchase Order ID Missing");
 }
 
-$po_id = (int)$_GET['po_id'];
+$po_id = intval($_GET['po_id']);
 
-$query = mysqli_query(
-$conn,
-"SELECT
+$query = "
+SELECT
 po.*,
-v.vendor_name,
-v.email,
-v.contact_person,
-v.gst_number
+
+q.quotation_amount,
+q.delivery_days,
+
+v.vendor_id,
+v.company_name,
+v.owner_name,
+v.gst_number,
+v.address,
+v.city,
+v.state,
+v.pincode
+
 FROM purchase_orders po
-LEFT JOIN vendors v
-ON po.vendor_id = v.vendor_id
-WHERE po.po_id = '$po_id'"
-);
 
-$data = mysqli_fetch_assoc($query);
+INNER JOIN quotations q
+ON po.quotation_id=q.quotation_id
 
-if(!$data)
+INNER JOIN vendors v
+ON po.vendor_id=v.vendor_id
+
+WHERE po.po_id='$po_id'
+";
+
+$result = mysqli_query($conn,$query);
+
+if(mysqli_num_rows($result)==0)
 {
     die("Purchase Order Not Found");
 }
 
-$subtotal = $data['amount'];
+$data = mysqli_fetch_assoc($result);
+
+/* CALCULATIONS */
+
+$subtotal = $data['quotation_amount'];
 
 $gst_rate = 18;
 
@@ -49,10 +60,7 @@ $grand_total =
 $subtotal + $gst_amount;
 
 $invoice_no =
-"INV-" .
-date("Ymd") .
-"-" .
-$po_id;
+"INV".date("Ymd").$po_id;
 ?>
 
 <!DOCTYPE html>
@@ -62,141 +70,18 @@ $po_id;
 
 <meta charset="UTF-8">
 
-<title>Invoice</title>
+<meta name="viewport"
+content="width=device-width, initial-scale=1.0">
 
-<style>
+<title>
+Invoice
+</title>
 
-body{
-font-family:'Poppins',sans-serif;
-background:#f8fafc;
-padding:30px;
-}
+<link rel="stylesheet"
+href="invoice.css">
 
-.invoice-box{
-max-width:900px;
-margin:auto;
-background:#fff;
-padding:40px;
-border-radius:20px;
-box-shadow:0 10px 30px rgba(0,0,0,.08);
-}
-
-.header{
-display:flex;
-justify-content:space-between;
-align-items:center;
-margin-bottom:30px;
-}
-
-.company h1{
-margin:0;
-color:#2563eb;
-}
-
-.company p{
-margin:5px 0;
-color:#64748b;
-}
-
-.invoice-title{
-text-align:right;
-}
-
-.invoice-title h2{
-margin:0;
-color:#0f172a;
-}
-
-.info{
-display:grid;
-grid-template-columns:1fr 1fr;
-gap:30px;
-margin-bottom:30px;
-}
-
-.card{
-background:#f8fafc;
-padding:20px;
-border-radius:15px;
-}
-
-.card h3{
-margin-bottom:15px;
-color:#2563eb;
-}
-
-table{
-width:100%;
-border-collapse:collapse;
-margin-top:20px;
-}
-
-table th{
-background:#2563eb;
-color:white;
-padding:14px;
-text-align:left;
-}
-
-table td{
-padding:14px;
-border-bottom:1px solid #e2e8f0;
-}
-
-.total{
-margin-top:25px;
-text-align:right;
-}
-
-.total p{
-font-size:18px;
-margin-bottom:10px;
-}
-
-.total h2{
-color:#2563eb;
-}
-
-.btn{
-padding:12px 22px;
-background:#2563eb;
-color:white;
-border:none;
-border-radius:10px;
-cursor:pointer;
-margin-top:20px;
-margin-right:10px;
-}
-
-.btn:hover{
-background:#1d4ed8;
-}
-
-.terms{
-margin-top:30px;
-background:#f8fafc;
-padding:20px;
-border-radius:12px;
-}
-
-@media print{
-
-.btn{
-display:none;
-}
-
-body{
-background:white;
-padding:0;
-}
-
-.invoice-box{
-box-shadow:none;
-}
-
-}
-
-</style>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+rel="stylesheet">
 
 </head>
 
@@ -206,88 +91,112 @@ box-shadow:none;
 
 <div class="header">
 
-<div class="company">
+<h1>
+VendorBridge
+</h1>
 
-<h1>VendorBridge ERP</h1>
-
-<p>Procurement & Vendor Management ERP</p>
-
-</div>
-
-<div class="invoice-title">
-
-<h2>TAX INVOICE</h2>
-
-<p>
-Invoice No:
-<strong><?php echo $invoice_no; ?></strong>
-</p>
-
-<p>
-Date:
-<?php echo date('d-m-Y'); ?>
-</p>
+<h2>
+Tax Invoice
+</h2>
 
 </div>
 
-</div>
+<hr>
 
-<div class="info">
-
-<div class="card">
-
-<h3>Vendor Details</h3>
+<div class="invoice-info">
 
 <p>
-<strong>Name:</strong>
-<?php echo $data['vendor_name']; ?>
+
+<strong>
+Invoice Number :
+</strong>
+
+<?php echo $invoice_no; ?>
+
 </p>
 
 <p>
-<strong>Contact:</strong>
-<?php echo $data['contact_person']; ?>
+
+<strong>
+Invoice Date :
+</strong>
+
+<?php echo date("d-m-Y"); ?>
+
 </p>
 
 <p>
-<strong>Email:</strong>
-<?php echo $data['email']; ?>
-</p>
 
-<p>
-<strong>GST:</strong>
-<?php echo $data['gst_number']; ?>
-</p>
+<strong>
+PO Number :
+</strong>
 
-</div>
-
-<div class="card">
-
-<h3>Purchase Order</h3>
-
-<p>
-<strong>PO Number:</strong>
 <?php echo $data['po_number']; ?>
-</p>
 
-<p>
-<strong>PO Date:</strong>
-<?php echo $data['po_date']; ?>
-</p>
-
-<p>
-<strong>Status:</strong>
-<?php echo ucfirst($data['status']); ?>
 </p>
 
 </div>
 
-</div>
+<hr>
+
+<h3>
+Vendor Details
+</h3>
+
+<p>
+
+<strong>
+Company :
+</strong>
+
+<?php echo $data['company_name']; ?>
+
+</p>
+
+<p>
+
+<strong>
+Owner :
+</strong>
+
+<?php echo $data['owner_name']; ?>
+
+</p>
+
+<p>
+
+<strong>
+GST :
+</strong>
+
+<?php echo $data['gst_number']; ?>
+
+</p>
+
+<p>
+
+<strong>
+Address :
+</strong>
+
+<?php
+echo
+$data['address'].", ".
+$data['city'].", ".
+$data['state']." - ".
+$data['pincode'];
+?>
+
+</p>
+
+<hr>
 
 <table>
 
 <tr>
 
 <th>Description</th>
+
 <th>Amount</th>
 
 </tr>
@@ -295,64 +204,76 @@ Date:
 <tr>
 
 <td>
-Purchase Order Amount
+
+Purchase Order
+
+<?php
+echo $data['po_number'];
+?>
+
 </td>
 
 <td>
-₹<?php echo number_format($subtotal,2); ?>
+
+₹<?php
+echo number_format(
+$subtotal,
+2
+);
+?>
+
 </td>
 
 </tr>
 
 </table>
 
-<div class="total">
+<div class="totals">
 
 <p>
+
 Subtotal :
-₹<?php echo number_format($subtotal,2); ?>
+
+₹<?php
+echo number_format(
+$subtotal,
+2
+);
+?>
+
 </p>
 
 <p>
+
 GST (18%) :
-₹<?php echo number_format($gst_amount,2); ?>
+
+₹<?php
+echo number_format(
+$gst_amount,
+2
+);
+?>
+
 </p>
 
 <h2>
+
 Grand Total :
-₹<?php echo number_format($grand_total,2); ?>
+
+₹<?php
+echo number_format(
+$grand_total,
+2
+);
+?>
+
 </h2>
 
 </div>
 
-<form method="POST" action="save_invoice.php">
-
-<input type="hidden"
-name="po_id"
-value="<?php echo $po_id; ?>">
-
-<input type="hidden"
-name="vendor_id"
-value="<?php echo $data['vendor_id']; ?>">
-
-<input type="hidden"
-name="invoice_number"
-value="<?php echo $invoice_no; ?>">
-
-<input type="hidden"
-name="subtotal"
-value="<?php echo $subtotal; ?>">
-
-<input type="hidden"
-name="gst_amount"
-value="<?php echo $gst_amount; ?>">
-
-<input type="hidden"
-name="grand_total"
-value="<?php echo $grand_total; ?>">
+<div class="actions">
 
 <button
-type="button"
 onclick="window.print()"
 class="btn">
 
@@ -360,9 +281,48 @@ Print Invoice
 
 </button>
 
+<form
+action="save_invoice.php"
+method="POST">
+
+<input
+type="hidden"
+name="po_id"
+value="<?php echo $po_id; ?>">
+
+<input
+type="hidden"
+name="quotation_id"
+value="<?php echo $data['quotation_id']; ?>">
+
+<input
+type="hidden"
+name="vendor_id"
+value="<?php echo $data['vendor_id']; ?>">
+
+<input
+type="hidden"
+name="invoice_number"
+value="<?php echo $invoice_no; ?>">
+
+<input
+type="hidden"
+name="subtotal"
+value="<?php echo $subtotal; ?>">
+
+<input
+type="hidden"
+name="gst_amount"
+value="<?php echo $gst_amount; ?>">
+
+<input
+type="hidden"
+name="grand_total"
+value="<?php echo $grand_total; ?>">
+
 <button
 type="submit"
-class="btn">
+class="btn save-btn">
 
 Save Invoice
 
@@ -370,23 +330,33 @@ Save Invoice
 
 </form>
 
-<div class="terms">
+</div>
 
-<h3>Terms & Conditions</h3>
+<hr>
+
+<h4>
+Terms & Conditions
+</h4>
 
 <ul>
 
-<li>Payment due within 30 days.</li>
+<li>
+Payment due within 30 days.
+</li>
 
-<li>GST charged as per government rules.</li>
+<li>
+GST charged as per government rules.
+</li>
 
-<li>Late payment may attract penalties.</li>
+<li>
+Late payments may attract penalties.
+</li>
 
-<li>This is a system generated invoice.</li>
+<li>
+This is a system-generated invoice.
+</li>
 
 </ul>
-
-</div>
 
 </div>
 
