@@ -1,14 +1,13 @@
 <?php
 
-$conn = mysqli_connect(
-"localhost",
-"root",
-"",
-"vendorbridge"
-);
-
+$host = "localhost";
+$user = "root";
+$pass = "";
+$dbname = "user_auth";
+//Jatin
+$conn = mysqli_connect($host, $user, $pass, $dbname);
+// Test GitHub update
 if(!$conn){
-die("Database Connection Failed");
+    die("Connection Failed: ".mysqli_connect_error());
 }
-
 ?>

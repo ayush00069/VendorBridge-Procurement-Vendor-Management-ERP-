@@ -1,6 +1,6 @@
-
 <?php
 session_start();
+include 'db.php';
 
 if(!isset($_SESSION['user_id']))
 {
@@ -8,208 +8,165 @@ if(!isset($_SESSION['user_id']))
     exit();
 }
 
-include 'db.php';
+if($_SESSION['role'] != 'officer')
+{
+    header("Location: login.php");
+    exit();
+}
+
+$user_id = $_SESSION['user_id'];
+
+/* FETCH OFFICER ID FROM OFFICERS TABLE */
+
+$getOfficer = $conn->prepare(
+"
+SELECT officer_id
+FROM officers
+WHERE user_id=?
+"
+);
+
+$getOfficer->bind_param(
+"i",
+$user_id
+);
+
+$getOfficer->execute();
+
+$officerResult =
+$getOfficer->get_result();
+
+if($officerResult->num_rows == 0)
+{
+    die("
+    Officer profile not found.
+    Please create officer record first.
+    ");
+}
+
+$officer =
+$officerResult->fetch_assoc();
+
+$officer_id =
+$officer['officer_id'];
+
+$success = "";
+$error = "";
 
 if(isset($_POST['create_rfq']))
 {
-    $rfq_title = mysqli_real_escape_string($conn,$_POST['rfq_title']);
-    $description = mysqli_real_escape_string($conn,$_POST['description']);
-    $quantity = mysqli_real_escape_string($conn,$_POST['quantity']);
-    $deadline = mysqli_real_escape_string($conn,$_POST['deadline']);
-    $vendor_id = mysqli_real_escape_string($conn,$_POST['vendor_id']);
+    $rfq_title =
+    trim($_POST['rfq_title']);
 
-    $attachment = "";
+    $category =
+    trim($_POST['category']);
 
-    if(isset($_FILES['attachment']) && $_FILES['attachment']['name']!="")
+    $description =
+    trim($_POST['description']);
+
+    $quantity =
+    intval($_POST['quantity']);
+
+    $estimated_budget =
+    floatval($_POST['estimated_budget']);
+
+    $deadline =
+    $_POST['deadline'];
+
+    $stmt = $conn->prepare(
+    "
+    INSERT INTO rfq
+    (
+        officer_id,
+        rfq_title,
+        category,
+        description,
+        quantity,
+        estimated_budget,
+        deadline,
+        status
+    )
+    VALUES
+    (
+        ?,
+        ?,
+        ?,
+        ?,
+        ?,
+        ?,
+        ?,
+        'open'
+    )
+    "
+    );
+
+    $stmt->bind_param(
+        "isssids",
+        $officer_id,
+        $rfq_title,
+        $category,
+        $description,
+        $quantity,
+        $estimated_budget,
+        $deadline
+    );
+
+    if($stmt->execute())
     {
-        $attachment =
-        time().'_'.$_FILES['attachment']['name'];
+        $success =
+        "RFQ Created Successfully";
 
-        move_uploaded_file(
-            $_FILES['attachment']['tmp_name'],
-            "uploads/".$attachment
-        );
+ 
+    mysqli_query(
+    $conn,
+    "INSERT INTO activity_logs
+    (user_id,role,activity,activity_time)
+    VALUES
+    (
+    '{$_SESSION['user_id']}',
+    'officer',
+    'Created RFQ',
+    NOW()
+    )"
+    );
+
+
     }
-
-    $created_by = $_SESSION['user_id'];
-
-    mysqli_query($conn,"
-        INSERT INTO rfqs
-        (
-            rfq_title,
-            description,
-            quantity,
-            attachment,
-            deadline,
-            vendor_id,
-            created_by,
-            status
-        )
-        VALUES
-        (
-            '$rfq_title',
-            '$description',
-            '$quantity',
-            '$attachment',
-            '$deadline',
-            '$vendor_id',
-            '$created_by',
-            'open'
-        )
-    ");
-
-    header("Location: rfqs.php");
-    exit();
+    else
+    {
+        $error =
+        "Database Error : "
+        .$stmt->error;
+    }
 }
 ?>
 
 <!DOCTYPE html>
 <html>
+
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
 
-<title>Create RFQ</title>
+<meta charset="UTF-8">
 
-<link rel="stylesheet"
+<meta
+name="viewport"
+content="width=device-width, initial-scale=1.0">
+
+<title>
+Create RFQ
+</title>
+
+<link
+rel="stylesheet"
+href="create_rfq.css">
+
+<link
+href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+rel="stylesheet">
+
+<link
+rel="stylesheet"
 href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-
-<style>
-
-*{
-    margin:0;
-    padding:0;
-    box-sizing:border-box;
-    font-family:'Segoe UI',sans-serif;
-}
-
-body{
-    background:#f1f5f9;
-    padding:40px;
-}
-
-.container{
-    max-width:1100px;
-    margin:auto;
-}
-
-.card{
-    background:#fff;
-    border-radius:20px;
-    padding:35px;
-    box-shadow:0 10px 30px rgba(0,0,0,.08);
-}
-
-.card-header{
-    margin-bottom:30px;
-}
-
-.card-header h2{
-    display:flex;
-    align-items:center;
-    gap:12px;
-    color:#0f172a;
-    font-size:28px;
-}
-
-.card-header i{
-    color:#2563eb;
-}
-
-.form-grid{
-    display:grid;
-    grid-template-columns:repeat(2,1fr);
-    gap:20px;
-}
-
-.form-group{
-    display:flex;
-    flex-direction:column;
-}
-
-.form-group label{
-    margin-bottom:8px;
-    font-weight:600;
-    color:#334155;
-}
-
-.form-group input,
-.form-group select,
-.form-group textarea{
-    padding:14px;
-    border:1px solid #cbd5e1;
-    border-radius:12px;
-    font-size:14px;
-}
-
-.form-group input:focus,
-.form-group select:focus,
-.form-group textarea:focus{
-    outline:none;
-    border-color:#2563eb;
-    box-shadow:0 0 0 4px rgba(37,99,235,.15);
-}
-
-.full-width{
-    grid-column:1/-1;
-}
-
-.form-actions{
-    display:flex;
-    gap:15px;
-    margin-top:30px;
-}
-
-.save-btn{
-    background:#2563eb;
-    color:#fff;
-    border:none;
-    padding:14px 24px;
-    border-radius:12px;
-    cursor:pointer;
-    font-size:15px;
-    font-weight:600;
-    display:flex;
-    align-items:center;
-    gap:8px;
-}
-
-.save-btn:hover{
-    background:#1d4ed8;
-}
-
-.cancel-btn{
-    background:#ef4444;
-    color:#fff;
-    text-decoration:none;
-    padding:14px 24px;
-    border-radius:12px;
-    font-weight:600;
-    display:flex;
-    align-items:center;
-    gap:8px;
-}
-
-.cancel-btn:hover{
-    background:#dc2626;
-}
-
-@media(max-width:768px){
-
-    body{
-        padding:15px;
-    }
-
-    .form-grid{
-        grid-template-columns:1fr;
-    }
-
-    .form-actions{
-        flex-direction:column;
-    }
-}
-
-</style>
 
 </head>
 
@@ -219,117 +176,172 @@ body{
 
 <div class="card">
 
-<div class="card-header">
-<h2>
-<i class="fa-solid fa-file-contract"></i>
+<div class="header">
+
+<i class="fa-solid fa-file-circle-plus"></i>
+
+<h1>
 Create RFQ
-</h2>
+</h1>
+
+<p>
+Request For Quotation
+</p>
+
 </div>
-
-<form method="POST" enctype="multipart/form-data">
-
-<div class="form-grid">
-
-<div class="form-group">
-<label>RFQ Title</label>
-<input
-type="text"
-name="rfq_title"
-required>
-</div>
-
-<div class="form-group">
-<label>Quantity</label>
-<input
-type="number"
-name="quantity"
-required>
-</div>
-
-<div class="form-group full-width">
-<label>Description</label>
-<textarea
-name="description"
-rows="5"
-required></textarea>
-</div>
-
-<div class="form-group">
-<label>Deadline</label>
-<input
-type="date"
-name="deadline"
-required>
-</div>
-
-<div class="form-group">
-<label>Select Vendor</label>
-
-<select name="vendor_id" required>
-
-<option value="">
-Select Vendor
-</option>
 
 <?php
-
-$vendors =
-mysqli_query(
-$conn,
-"SELECT * FROM vendors
-WHERE status='active'
-ORDER BY vendor_name"
-);
-
-while($row=mysqli_fetch_assoc($vendors))
+if($success!="")
 {
 ?>
 
-<option value="<?php echo $row['vendor_id']; ?>">
+<div class="success">
 
-<?php echo $row['vendor_name']; ?>
+<?php
+echo $success;
+?>
 
-</option>
+</div>
 
 <?php
 }
 ?>
 
+<?php
+if($error!="")
+{
+?>
+
+<div class="error">
+
+<?php
+echo $error;
+?>
+
+</div>
+
+<?php
+}
+?>
+
+<form method="POST">
+
+<div class="form-group">
+
+<label>
+RFQ Title
+</label>
+
+<input
+type="text"
+name="rfq_title"
+placeholder="Enter RFQ Title"
+required>
+
+</div>
+
+<div class="form-group">
+
+<label>
+Category
+</label>
+
+<select
+name="category"
+required>
+
+<option value="">
+Select Category
+</option>
+
+<option value="IT Equipment">
+IT Equipment
+</option>
+
+<option value="Furniture">
+Furniture
+</option>
+
+<option value="Construction">
+Construction
+</option>
+
+<option value="Office Supplies">
+Office Supplies
+</option>
+
+<option value="Services">
+Services
+</option>
+
 </select>
 
 </div>
 
-<div class="form-group full-width">
-<label>Attachment</label>
+<div class="form-group">
+
+<label>
+Description
+</label>
+
+<textarea
+name="description"
+placeholder="Enter RFQ Description"
+required></textarea>
+
+</div>
+
+<div class="row">
+
+<div class="form-group">
+
+<label>
+Quantity
+</label>
+
 <input
-type="file"
-name="attachment">
-</div>
+type="number"
+name="quantity"
+required>
 
 </div>
 
-<div class="form-actions">
+<div class="form-group">
+
+<label>
+Estimated Budget
+</label>
+
+<input
+type="number"
+step="0.01"
+name="estimated_budget"
+required>
+
+</div>
+
+</div>
+
+<div class="form-group">
+
+<label>
+Deadline
+</label>
+
+<input
+type="date"
+name="deadline"
+required>
+
+</div>
 
 <button
 type="submit"
-name="create_rfq"
-class="save-btn">
+name="create_rfq">
 
-<i class="fa-solid fa-paper-plane"></i>
 Create RFQ
 
 </button>
-
-<a
-href="rfq.php"
-class="cancel-btn">
-
-<i class="fa-solid fa-xmark"></i>
-Cancel
-
-</a>
-
-</div>
 
 </form>
 
@@ -338,4 +350,5 @@ Cancel
 </div>
 
 </body>
+
 </html>
